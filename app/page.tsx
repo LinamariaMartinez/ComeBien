@@ -9,6 +9,9 @@ import MealLogItem from './components/MealLogItem';
 import CycleIndicator from './components/CycleIndicator';
 import WhatsMissing from './components/WhatsMissing';
 import MealHistory from './components/MealHistory';
+import ChatAssistant from './components/ChatAssistant';
+
+type Tab = 'hoy' | 'chat' | 'historial';
 
 const DEFAULT_SETTINGS: UserSettings = {
   id: 1,
@@ -16,6 +19,12 @@ const DEFAULT_SETTINGS: UserSettings = {
   cycle_length: 28,
   updated_at: '',
 };
+
+const NAV_ITEMS: { key: Tab; emoji: string; label: string }[] = [
+  { key: 'hoy', emoji: '📊', label: 'Hoy' },
+  { key: 'chat', emoji: '💬', label: 'Consúltame' },
+  { key: 'historial', emoji: '📅', label: 'Historial' },
+];
 
 function todayStr() {
   return new Date().toISOString().split('T')[0];
@@ -35,7 +44,7 @@ export default function Home() {
   const [historyLogs, setHistoryLogs] = useState<DailyLog[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'hoy' | 'historial'>('hoy');
+  const [tab, setTab] = useState<Tab>('hoy');
 
   const today = todayStr();
 
@@ -94,6 +103,10 @@ export default function Home() {
     if (res.ok) setSettings(await res.json());
   }
 
+  function handleChatMealLogged(log: DailyLog) {
+    setLogs((prev) => [...prev, log]);
+  }
+
   const totals = sumPortions(logs);
 
   if (loading) {
@@ -107,43 +120,31 @@ export default function Home() {
     );
   }
 
+  const isChatTab = tab === 'chat';
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-lg mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🥗</span>
-              <div>
-                <h1 className="text-base font-bold text-green-700 leading-none">ComeBien</h1>
-                <p className="text-xs text-gray-400 mt-0.5 capitalize">{formatDate(today)}</p>
-              </div>
-            </div>
-            <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-              {(['hoy', 'historial'] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
-                    tab === t ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500'
-                  }`}
-                >
-                  {t === 'hoy' ? '📊 Hoy' : '📅 Historial'}
-                </button>
-              ))}
-            </div>
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-10 shrink-0">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-2">
+          <span className="text-2xl">🥗</span>
+          <div>
+            <h1 className="text-base font-bold text-green-700 leading-none">ComeBien</h1>
+            <p className="text-xs text-gray-400 mt-0.5 capitalize">{formatDate(today)}</p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-4 flex flex-col gap-4 pb-10">
-        {tab === 'hoy' ? (
+      {/* Main content */}
+      <main
+        className={`flex-1 max-w-lg mx-auto w-full ${
+          isChatTab ? 'flex flex-col overflow-hidden px-4 py-4' : 'px-4 py-4 flex flex-col gap-4 pb-24'
+        }`}
+      >
+        {tab === 'hoy' && (
           <>
-            {/* Cycle indicator */}
             <CycleIndicator settings={settings} onUpdate={handleCycleUpdate} />
 
-            {/* Progress grid */}
             <section>
               <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                 Tu progreso de hoy
@@ -162,13 +163,9 @@ export default function Home() {
               </div>
             </section>
 
-            {/* What's missing */}
             <WhatsMissing totals={totals} />
-
-            {/* Meal logger */}
             <MealLogger onLog={handleLog} />
 
-            {/* Today's logs */}
             {logs.length > 0 ? (
               <section>
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -188,7 +185,17 @@ export default function Home() {
               </div>
             )}
           </>
-        ) : (
+        )}
+
+        {tab === 'chat' && (
+          <ChatAssistant
+            currentPortions={totals}
+            today={today}
+            onMealLogged={handleChatMealLogged}
+          />
+        )}
+
+        {tab === 'historial' && (
           <section>
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
               Últimos 7 días
@@ -197,6 +204,27 @@ export default function Home() {
           </section>
         )}
       </main>
+
+      {/* Bottom navigation */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-10"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="max-w-lg mx-auto grid grid-cols-3">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setTab(item.key)}
+              className={`flex flex-col items-center py-2.5 gap-0.5 transition-colors active:scale-95 ${
+                tab === item.key ? 'text-green-600' : 'text-gray-400'
+              }`}
+            >
+              <span className="text-xl">{item.emoji}</span>
+              <span className="text-xs font-medium">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }
