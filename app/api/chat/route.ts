@@ -5,7 +5,9 @@ import { createUserClient, extractToken } from '@/lib/supabase';
 import { Portions, MealTime, DailyLog, UserProfile } from '@/lib/types';
 import { FOOD_GROUPS } from '@/lib/constants';
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getClient() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 function unauthorized() {
   return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -146,6 +148,7 @@ export async function POST(request: NextRequest) {
       ...messages,
     ];
 
+    const client = getClient();
     const response = await client.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: fullMessages,

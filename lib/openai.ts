@@ -2,12 +2,13 @@ import OpenAI from 'openai';
 import { Portions } from './types';
 import { NUTRITION_SYSTEM_PROMPT } from './constants';
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazy: instantiate only when called so build time doesn't require the key
+function getClient() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 export async function parseMealDescription(description: string): Promise<Portions> {
-  const response = await client.chat.completions.create({
+  const response = await getClient().chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
       { role: 'system', content: NUTRITION_SYSTEM_PROMPT },
