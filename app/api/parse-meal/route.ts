@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseMealDescription } from '@/lib/openai';
-import { supabase } from '@/lib/supabase';
+import { createUserClient, extractToken } from '@/lib/supabase';
 import { MealTime } from '@/lib/types';
+
+function unauthorized() {
+  return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+}
 
 export async function POST(request: NextRequest) {
   try {
+    const token = extractToken(request.headers.get('Authorization'));
+    if (!token) return unauthorized();
+
+    const supabase = createUserClient(token);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return unauthorized();
+
     const body = await request.json();
     const { description, meal_time, date } = body as {
       description: string;
@@ -25,6 +36,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from('daily_logs')
       .insert({
+        user_id: user.id,
         date: logDate,
         meal_time,
         description: description.trim(),

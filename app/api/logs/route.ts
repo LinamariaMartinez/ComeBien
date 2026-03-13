@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createUserClient, extractToken } from '@/lib/supabase';
+
+function unauthorized() {
+  return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+}
 
 export async function GET(request: NextRequest) {
   try {
+    const token = extractToken(request.headers.get('Authorization'));
+    if (!token) return unauthorized();
+
+    const supabase = createUserClient(token);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return unauthorized();
+
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date');
     const start = searchParams.get('start');
     const end = searchParams.get('end');
 
+    // RLS filters to user's own rows automatically
     let query = supabase
       .from('daily_logs')
       .select('*')

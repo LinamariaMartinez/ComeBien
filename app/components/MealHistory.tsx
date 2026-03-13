@@ -5,6 +5,7 @@ import { DAILY_TARGETS, FOOD_GROUPS, sumPortions } from '@/lib/constants';
 
 interface MealHistoryProps {
   logs: DailyLog[];
+  targets?: Portions;
 }
 
 function getDayLabel(dateStr: string): string {
@@ -22,10 +23,18 @@ function getDayLabel(dateStr: string): string {
   return date.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'short' });
 }
 
-function DaySummary({ date, logs }: { date: string; logs: DailyLog[] }) {
+function DaySummary({
+  date,
+  logs,
+  targets,
+}: {
+  date: string;
+  logs: DailyLog[];
+  targets: Portions;
+}) {
   const totals = sumPortions(logs);
   const completedGroups = FOOD_GROUPS.filter(
-    (g) => totals[g.key] >= DAILY_TARGETS[g.key]
+    (g) => totals[g.key] >= targets[g.key]
   ).length;
   const totalGroups = FOOD_GROUPS.length;
 
@@ -46,7 +55,7 @@ function DaySummary({ date, logs }: { date: string; logs: DailyLog[] }) {
       <div className="flex flex-wrap gap-1.5">
         {FOOD_GROUPS.map((g) => {
           const val = totals[g.key];
-          const target = DAILY_TARGETS[g.key];
+          const target = targets[g.key];
           const done = val >= target;
           return (
             <span
@@ -64,7 +73,7 @@ function DaySummary({ date, logs }: { date: string; logs: DailyLog[] }) {
   );
 }
 
-export default function MealHistory({ logs }: MealHistoryProps) {
+export default function MealHistory({ logs, targets = DAILY_TARGETS }: MealHistoryProps) {
   const grouped = logs.reduce<Record<string, DailyLog[]>>((acc, log) => {
     acc[log.date] = acc[log.date] || [];
     acc[log.date].push(log);
@@ -84,7 +93,7 @@ export default function MealHistory({ logs }: MealHistoryProps) {
   return (
     <div className="flex flex-col gap-3">
       {sortedDates.map((date) => (
-        <DaySummary key={date} date={date} logs={grouped[date]} />
+        <DaySummary key={date} date={date} logs={grouped[date]} targets={targets} />
       ))}
     </div>
   );

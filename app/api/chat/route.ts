@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { parseMealDescription } from '@/lib/openai';
-import { supabase } from '@/lib/supabase';
-import { Portions, MealTime, DailyLog } from '@/lib/types';
-import { DAILY_TARGETS, FOOD_GROUPS } from '@/lib/constants';
+import { createUserClient, extractToken } from '@/lib/supabase';
+import { Portions, MealTime, DailyLog, UserProfile } from '@/lib/types';
+import { FOOD_GROUPS } from '@/lib/constants';
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+function unauthorized() {
+  return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+}
 
 function inferMealTime(hour: number): MealTime {
   if (hour < 10) return 'desayuno';
@@ -15,22 +19,26 @@ function inferMealTime(hour: number): MealTime {
   return 'cena';
 }
 
-function portionStatus(portions: Portions): string {
+function portionStatus(portions: Portions, targets: Portions): string {
   return FOOD_GROUPS.map((g) => {
-    const remaining = Math.max(0, DAILY_TARGETS[g.key] - portions[g.key]);
-    const done = portions[g.key] >= DAILY_TARGETS[g.key];
-    return `${g.emoji} ${g.label}: ${+portions[g.key].toFixed(1)}/${DAILY_TARGETS[g.key]} ${done ? '✅' : `(faltan ${+remaining.toFixed(1)})`}`;
+    const target = targets[g.key];
+    const remaining = Math.max(0, target - portions[g.key]);
+    const done = portions[g.key] >= target;
+    return `${g.emoji} ${g.label}: ${+portions[g.key].toFixed(1)}/${target} ${done ? '✅' : `(faltan ${+remaining.toFixed(1)})`}`;
   }).join('\n');
 }
 
-function buildSystemPrompt(portions: Portions, hour: number): string {
+function buildSystemPrompt(portions: Portions, targets: Portions, hour: number, profile: UserProfile): string {
   const mealTime = inferMealTime(hour);
   const isEndOfDay = hour >= 20;
+  const planLine = FOOD_GROUPS.map(
+    (g) => `${g.emoji} ${g.label}: ${targets[g.key]}`
+  ).join(' | ');
 
-  return `Eres una asistente de nutrición amigable para una atleta ovo-vegetariana colombiana.
+  return `Eres una asistente de nutrición amigable para ${profile.name || 'la usuaria'}, una atleta ${profile.diet_type || 'ovo-vegetariana'} colombiana.
 
 PLAN DIARIO:
-🫘 Legumbres: 3 | 🌾 Cereales: 3 | 🥚 Huevos: 2 | 🥦 Verduras: 4 | 🍌 Frutas: 4 | 🥑 Grasas: 3 | 🥛 Leche soya: 2 | 🫙 Yogur: 1
+${planLine}
 
 SISTEMA DE EQUIVALENTES:
 • 1 legumbre = ½ taza fríjol/garbanzos/lentejas cocidos
@@ -41,7 +49,7 @@ SISTEMA DE EQUIVALENTES:
 • 1 soya = 3 cdas leche soya en polvo | 1 yogur = ¾ taza yogur griego
 
 PROGRESO HOY:
-${portionStatus(portions)}
+${portionStatus(portions, targets)}
 
 HORA: ${hour}:00 → comida actual inferida: ${mealTime}
 
@@ -102,6 +110,26 @@ const LOG_FOOD_TOOL: OpenAI.Chat.ChatCompletionTool = {
 
 export async function POST(request: NextRequest) {
   try {
+    const token = extractToken(request.headers.get('Authorization'));
+    if (!token) return unauthorized();
+
+    const supabase = createUserClient(token);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return unauthorized();
+
+    // Fetch user profile for name + targets
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    const userProfile = profile as UserProfile | null;
+    const targets: Portions = userProfile?.daily_targets ?? {
+      legumes: 3, cereals: 3, eggs: 2, vegetables: 4,
+      fruits: 4, fats: 3, soy_milk: 2, yogurt: 1,
+    };
+
     const { messages, currentPortions, date } = (await request.json()) as {
       messages: OpenAI.Chat.ChatCompletionMessageParam[];
       currentPortions: Portions;
@@ -111,7 +139,7 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const hour = now.getHours();
     const mealTime = inferMealTime(hour);
-    const systemContent = buildSystemPrompt(currentPortions, hour);
+    const systemContent = buildSystemPrompt(currentPortions, targets, hour, userProfile ?? { name: '' } as UserProfile);
 
     const fullMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemContent },
@@ -144,6 +172,7 @@ export async function POST(request: NextRequest) {
         const { data } = await supabase
           .from('daily_logs')
           .insert({
+            user_id: user.id,
             date,
             meal_time: mealTime,
             description: food_description,
@@ -171,7 +200,7 @@ export async function POST(request: NextRequest) {
           logged: food_description,
           meal_time: mealTime,
           portions_added: parsed_portions,
-          updated_progress: portionStatus(updated),
+          updated_progress: portionStatus(updated, targets),
         });
 
         const followUp = await client.chat.completions.create({

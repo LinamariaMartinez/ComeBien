@@ -5,14 +5,15 @@ import { DAILY_TARGETS, FOOD_GROUPS } from '@/lib/constants';
 
 interface WhatsMissingProps {
   totals: Portions;
+  targets?: Portions;
 }
 
-export default function WhatsMissing({ totals }: WhatsMissingProps) {
+export default function WhatsMissing({ totals, targets = DAILY_TARGETS }: WhatsMissingProps) {
   const missing = FOOD_GROUPS.filter(
-    (g) => totals[g.key] < DAILY_TARGETS[g.key]
+    (g) => totals[g.key] < targets[g.key]
   ).map((g) => ({
     ...g,
-    remaining: +(DAILY_TARGETS[g.key] - totals[g.key]).toFixed(1),
+    remaining: +(targets[g.key] - totals[g.key]).toFixed(1),
   }));
 
   if (missing.length === 0) {

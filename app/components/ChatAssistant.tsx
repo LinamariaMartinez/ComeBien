@@ -16,6 +16,7 @@ interface ApiMessage {
 interface ChatAssistantProps {
   currentPortions: Portions;
   today: string;
+  token: string;
   onMealLogged: (log: DailyLog) => void;
 }
 
@@ -26,7 +27,7 @@ const QUICK_PROMPTS = [
   'Receta de postre saludable',
 ];
 
-export default function ChatAssistant({ currentPortions, today, onMealLogged }: ChatAssistantProps) {
+export default function ChatAssistant({ currentPortions, today, token, onMealLogged }: ChatAssistantProps) {
   const [displayMessages, setDisplayMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -61,7 +62,10 @@ export default function ChatAssistant({ currentPortions, today, onMealLogged }: 
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
           body: JSON.stringify({
             messages: apiMessages.current,
             currentPortions: currentPortionsRef.current,
@@ -84,7 +88,7 @@ export default function ChatAssistant({ currentPortions, today, onMealLogged }: 
         setLoading(false);
       }
     },
-    [today, onMealLogged, loading]
+    [today, token, onMealLogged, loading]
   );
 
   // Auto-trigger end-of-day summary

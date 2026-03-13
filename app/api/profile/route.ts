@@ -5,10 +5,8 @@ function unauthorized() {
   return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+/** GET /api/profile — returns the current user's profile */
+export async function GET(request: NextRequest) {
   try {
     const token = extractToken(request.headers.get('Authorization'));
     if (!token) return unauthorized();
@@ -17,13 +15,16 @@ export async function DELETE(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return unauthorized();
 
-    const { id } = await params;
-    // RLS ensures user can only delete their own logs
-    const { error } = await supabase.from('daily_logs').delete().eq('id', id);
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
     if (error) throw error;
-    return NextResponse.json({ success: true });
+    return NextResponse.json(data);
   } catch (err) {
-    console.error('logs DELETE error:', err);
-    return NextResponse.json({ error: 'Error al eliminar registro' }, { status: 500 });
+    console.error('profile GET error:', err);
+    return NextResponse.json({ error: 'Error al obtener perfil' }, { status: 500 });
   }
 }
