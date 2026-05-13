@@ -61,7 +61,8 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>('hoy');
   const [showSettings, setShowSettings] = useState(false);
 
-  const today = todayStr();
+  const [today, setToday] = useState('');
+  useEffect(() => { setToday(todayStr()); }, []);
   const token = session?.access_token ?? '';
   const targets: Portions = profile?.daily_targets ?? DAILY_TARGETS;
 
