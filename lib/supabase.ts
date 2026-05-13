@@ -1,20 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? '';
+function getSupabaseConfig() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? '';
+  return { url, key };
+}
 
-/** Anonymous server client (no user context). */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+let _supabase: ReturnType<typeof createClient> | null = null;
 
-/**
- * Creates a Supabase client scoped to the authenticated user.
- * Pass the Bearer token from the request Authorization header.
- * RLS automatically filters data to that user's rows.
- */
+export function getSupabase() {
+  if (!_supabase) {
+    const { url, key } = getSupabaseConfig();
+    _supabase = createClient(url, key);
+  }
+  return _supabase;
+}
+
+/** @deprecated use getSupabase() instead */
+export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
+  get(_, prop) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (getSupabase() as any)[prop];
+  },
+});
+
 export function createUserClient(token: string) {
-  return createClient(supabaseUrl, supabaseAnonKey, {
+  const { url, key } = getSupabaseConfig();
+  return createClient(url, key, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
   });

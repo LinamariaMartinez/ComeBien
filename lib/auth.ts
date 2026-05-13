@@ -2,15 +2,27 @@
 
 import { createClient, Session } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+let _browser: ReturnType<typeof createClient> | null = null;
+
+function getBrowserClient() {
+  if (!_browser) {
+    _browser = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+      { auth: { persistSession: true, storageKey: 'comebien-auth' } },
+    );
+  }
+  return _browser;
+}
 
 /**
  * Browser-side Supabase client with session persistence.
  * Use this in Client Components for auth operations.
  */
-export const supabaseBrowser = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: { persistSession: true, storageKey: 'comebien-auth' },
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const supabaseBrowser: ReturnType<typeof createClient> = new Proxy({} as any, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  get(_, prop) { return (getBrowserClient() as any)[prop]; },
 });
 
 export type { Session };
